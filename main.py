@@ -21,8 +21,9 @@ REGION_Y = 0.367
 REGION_W = 0.086
 REGION_H = 0.042
 
-POLL_INTERVAL  = 0.5    # seconds between captures
+POLL_INTERVAL  = 0.1    # seconds between captures
 HISTORY_SIZE   = 5      # how many unique scans to remember
+MAX_RS         = 100_000  # ignore OCR readings above this value
 DEBUG          = False  # set True to save processed images to debug/ folder
 
 # ── Colours ───────────────────────────────────────────────────────────────────
@@ -62,7 +63,11 @@ class Overlay:
             monitors = sct.monitors
             idx = OVERLAY_MONITOR if OVERLAY_MONITOR < len(monitors) else 1
             m   = monitors[idx]
-        self.root.geometry(f"360x{28 + HISTORY_SIZE * 50 + 12}+{m['left'] + 20}+{m['top'] + 20}")
+        w = 360
+        h = 28 + HISTORY_SIZE * 50 + 12
+        x = m["left"] + (m["width"] - w) // 2
+        y = m["top"] + 20
+        self.root.geometry(f"{w}x{h}+{x}+{y}")
 
     # ── UI ────────────────────────────────────────────────────────────────────
 
@@ -154,44 +159,51 @@ class Overlay:
     def _redraw(self):
         entries = []
         for rs in self._history:
-            results = analyze_rs(rs, self._mode)
-            entries.append((rs, results[0] if results else None))
+            results  = analyze_rs(rs, self._mode)
+            exact    = [r for r in results if r["label"] == "EXACT"]
+            entries.append((rs, exact))
         self.root.after(0, self._draw, entries)
 
     def _draw(self, entries):
         for i, row in enumerate(self._rows):
             if i < len(entries):
-                rs_val, match = entries[i]
+                rs_val, exact = entries[i]
                 alpha = max(0.4, 1.0 - i * 0.15)
-                self._fill_row(row, rs_val, match, alpha)
+                self._fill_row(row, rs_val, exact, alpha)
             else:
                 self._clear_row(row, placeholder="Waiting…" if i == 0 else "")
 
-    def _fill_row(self, row, rs_val, match, alpha=1.0):
-        rs_fg   = self._dim("#888888", alpha)
+    def _fill_row(self, row, rs_val, exact, alpha=1.0):
+        """exact is a list of EXACT-confidence matches (may be empty)."""
+        rs_fg   = self._dim("#aaaaaa", alpha)
         meta_fg = self._dim("#445566", alpha)
+        dim_fg  = self._dim("#444444", alpha)
         row["rs"].config(text=f"{rs_val:,}", fg=rs_fg)
-        if match:
-            name_color = TIER_COLOR.get(match["tier"], "#fff")
+
+        if exact:
+            m          = exact[0]
+            name_color = self._dim(TIER_COLOR.get(m["tier"], "#fff"), alpha)
             tier_color = self._dim(name_color, 0.65)
-            conf_color = CONF_COLOR.get(match["label"], "#888")
-            if alpha < 1.0:
-                name_color = self._dim(name_color, alpha)
-                tier_color = self._dim(tier_color, alpha)
-                conf_color = self._dim(conf_color, alpha)
-            row["nodes"].config(text=f"{match['nodes']}×", fg=name_color)
-            row["name"].config( text=match["name"],         fg=name_color)
-            row["tier"].config( text=f"[{match['tier']}]", fg=tier_color)
-            row["conf"].config(
-                text=f"{match['label']}  {match['confidence']}%",
-                fg=conf_color)
-            row["meta"].config(text=f"         {match['type']}", fg=meta_fg)
+            row["nodes"].config(text=f"{m['nodes']}×", fg=name_color)
+            row["name"].config( text=m["name"],         fg=name_color)
+            row["tier"].config( text=f"[{m['tier']}]", fg=tier_color)
+            row["conf"].config( text=m["type"],         fg=self._dim("#667788", alpha))
+
+            # additional exact matches (rare) shown on meta line
+            if len(exact) > 1:
+                others = "  also: " + "  /  ".join(
+                    f"{r['nodes']}× {r['name']} [{r['tier']}]" for r in exact[1:]
+                )
+                row["meta"].config(text=others, fg=meta_fg)
+            else:
+                row["meta"].config(text="", fg="#333")
         else:
-            row["nodes"].config(text="?",        fg="#555")
-            row["name"].config( text="No match", fg="#555")
-            row["tier"].config( text="",         fg="#333")
-            row["conf"].config( text="",         fg="#333")
-            row["meta"].config( text="",         fg="#333")
+            # logged but no exact match — show RS, no name
+            row["nodes"].config(text="",  fg="#333")
+            row["name"].config( text="—", fg=dim_fg)
+            row["tier"].config( text="",  fg="#333")
+            row["conf"].config( text="",  fg="#333")
+            row["meta"].config( text="",  fg="#333")
 
     def _clear_row(self, row, placeholder=""):
         row["rs"].config(   text="",            fg="#333")
@@ -230,9 +242,11 @@ class Overlay:
                     total_rs = _best_rs(_ocr(img))
 
                     if total_rs is not None:
-                        if not self._history or total_rs != self._history[0]:
-                            self._history.appendleft(total_rs)
-                            self._redraw()
+                        results = analyze_rs(total_rs, self._mode)
+                        if any(r["label"] == "EXACT" for r in results):
+                            if total_rs not in self._history:
+                                self._history.appendleft(total_rs)
+                                self._redraw()
                 except Exception:
                     pass
                 time.sleep(POLL_INTERVAL)
@@ -252,7 +266,7 @@ _debug_counter = 0
 def _ocr(img: Image.Image) -> str:
     global _debug_counter
     w, h = img.size
-    img  = img.crop((0, int(h * 0.20), int(w * 0.95), h))
+    img  = img.crop((0, int(h * 0.20), int(w * 0.95), int(h * 0.62)))
     gray   = img.convert("L")
     gray   = gray.resize((gray.width * 4, gray.height * 4), Image.LANCZOS)
     binary = gray.point(lambda p: 255 if p > 140 else 0)
@@ -270,6 +284,12 @@ def _ocr(img: Image.Image) -> str:
 
 
 def _best_rs(digits: str) -> int | None:
+    """
+    Return the most plausible RS value from OCR digits.
+    Tries stripping 0-2 leading digits (icon noise) and picks the candidate
+    with the highest analyze_rs() confidence. If nothing scores well,
+    still returns the raw value so it appears in history as unrecognized.
+    """
     if len(digits) < 3:
         return None
     best_val, best_conf = None, -1
@@ -278,7 +298,7 @@ def _best_rs(digits: str) -> int | None:
             val = int(digits[start:])
         except ValueError:
             continue
-        if val < 1000:
+        if val < 1000 or val > MAX_RS:
             continue
         results = analyze_rs(val)
         conf = results[0]["confidence"] if results else -1
