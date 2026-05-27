@@ -1,4 +1,5 @@
 RESOURCES = [
+    {"rs": 2000, "name": "Debris",        "type": "Debris",         "tier": "C", "notes": "Not minable."},
     {"rs": 3170, "name": "Quantainium",  "type": "Volatile Gem",   "tier": "S", "notes": "Highly volatile. Sell FAST after mining."},
     {"rs": 3185, "name": "Stileron",     "type": "Gem",            "tier": "A", "notes": "Rare gem deposit."},
     {"rs": 3200, "name": "Savrilium",    "type": "Gem",            "tier": "A", "notes": "High-value gem."},
