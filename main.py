@@ -4,6 +4,9 @@ import time
 import re
 import mss
 import pytesseract
+import configparser
+import shutil
+import os
 from PIL import Image
 from collections import deque
 
@@ -13,18 +16,27 @@ from resources import analyze_rs
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 # ── Config ────────────────────────────────────────────────────────────────────
-GAME_MONITOR    = 1     # monitor the game runs on
-OVERLAY_MONITOR = 2     # monitor for the overlay (set to 1 if single monitor)
+_cfg_path  = os.path.join(os.path.dirname(__file__), "config.ini")
+_cfg_example = os.path.join(os.path.dirname(__file__), "config.example.ini")
 
-REGION_X = 0.459
-REGION_Y = 0.367
-REGION_W = 0.086
-REGION_H = 0.042
+if not os.path.exists(_cfg_path):
+    shutil.copy(_cfg_example, _cfg_path)
 
-POLL_INTERVAL  = 0.1    # seconds between captures
-HISTORY_SIZE   = 5      # how many unique scans to remember
-MAX_RS         = 100_000  # ignore OCR readings above this value
-DEBUG          = False  # set True to save processed images to debug/ folder
+_cfg = configparser.ConfigParser()
+_cfg.read(_cfg_path)
+
+GAME_MONITOR    = _cfg.getint("monitors", "game_monitor",    fallback=1)
+OVERLAY_MONITOR = _cfg.getint("monitors", "overlay_monitor", fallback=2)
+
+REGION_X = _cfg.getfloat("region", "x", fallback=0.459)
+REGION_Y = _cfg.getfloat("region", "y", fallback=0.367)
+REGION_W = _cfg.getfloat("region", "w", fallback=0.086)
+REGION_H = _cfg.getfloat("region", "h", fallback=0.042)
+
+POLL_INTERVAL = 0.1
+HISTORY_SIZE  = _cfg.getint  ("settings", "history_size", fallback=5)
+MAX_RS        = _cfg.getint  ("settings", "max_rs",       fallback=100_000)
+DEBUG         = _cfg.getboolean("settings", "debug",      fallback=False)
 
 # ── Colours ───────────────────────────────────────────────────────────────────
 TIER_COLOR = {"S": "#FFD700", "A": "#00CC55", "B": "#FFAA00", "C": "#888888"}
@@ -175,9 +187,8 @@ class Overlay:
 
     def _fill_row(self, row, rs_val, exact, alpha=1.0):
         """exact is a list of EXACT-confidence matches (may be empty)."""
-        rs_fg   = self._dim("#aaaaaa", alpha)
-        meta_fg = self._dim("#445566", alpha)
-        dim_fg  = self._dim("#444444", alpha)
+        rs_fg  = self._dim("#aaaaaa", alpha)
+        dim_fg = self._dim("#444444", alpha)
         row["rs"].config(text=f"{rs_val:,}", fg=rs_fg)
 
         if exact:
@@ -189,16 +200,17 @@ class Overlay:
             row["tier"].config( text=f"[{m['tier']}]", fg=tier_color)
             row["conf"].config( text=m["type"],         fg=self._dim("#667788", alpha))
 
-            # additional exact matches (rare) shown on meta line
             if len(exact) > 1:
-                others = "  also: " + "  /  ".join(
+                parts = [
                     f"{r['nodes']}× {r['name']} [{r['tier']}]" for r in exact[1:]
+                ]
+                row["meta"].config(
+                    text="  or: " + "  |  ".join(parts),
+                    fg=self._dim("#8899aa", alpha),
                 )
-                row["meta"].config(text=others, fg=meta_fg)
             else:
                 row["meta"].config(text="", fg="#333")
         else:
-            # logged but no exact match — show RS, no name
             row["nodes"].config(text="",  fg="#333")
             row["name"].config( text="—", fg=dim_fg)
             row["tier"].config( text="",  fg="#333")
