@@ -4,6 +4,8 @@ A real-time Star Citizen mining assistant. It watches your screen while you mine
 
 Inspired by [rainbowramen.github.io/sc-mining-hud](https://rainbowramen.github.io/sc-mining-hud/) — this is a live overlay version that reads your HUD automatically so you never have to type anything.
 
+> **Work in progress** — this tool is still in development and not yet finished. It has only been tested on the **DRAKE Golem** ship. Other ships, resolutions, or HUD layouts may not work correctly. Feedback and bug reports are welcome.
+
 ---
 
 ## Install — step by step
