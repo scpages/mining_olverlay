@@ -48,6 +48,23 @@ It will automatically check that everything is installed and install any missing
 
 ---
 
+## Configuration
+
+All settings are in the **`config.ini`** file in the same folder as the overlay. It is created automatically the first time you run `launch.bat` — just open it in Notepad to edit.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `game_monitor` | `1` | Which monitor the game runs on |
+| `overlay_monitor` | `2` | Which monitor to show the overlay on (set to `1` if single monitor) |
+| `x / y / w / h` | see file | Position and size of the capture region on screen |
+| `history_size` | `5` | How many readings to keep on screen |
+| `max_rs` | `100000` | Readings above this value are ignored |
+| `debug` | `false` | Set to `true` to save debug images while running |
+
+The capture region is calibrated for **2560×1440** on the DRAKE Golem. If readings are wrong for your setup, run `debug_capture.py` to help tune the region values.
+
+---
+
 ## Mining modes
 
 Switch modes by clicking the button in the top-left of the overlay.
@@ -75,14 +92,14 @@ The RS value in the HUD is scaled differently depending on the tool you use — 
 
 ## Troubleshooting
 
-**The overlay doesn't detect anything / wrong resources showing:**
-The capture region is calibrated for **2560×1440**. If you run a different resolution, open `main.py` in Notepad and adjust the `REGION_X`, `REGION_Y`, `REGION_W`, `REGION_H` values at the top. Run `debug_capture.py` to help tune it — it saves screenshots of what the overlay is reading.
+**Nothing is detected / wrong resources showing:**
+The capture region needs to match where the RS number appears on your screen. Open `config.ini` and adjust the `x`, `y`, `w`, `h` values. Run `debug_capture.py` to see what the overlay is actually reading.
 
 **I only have one monitor:**
-Open `main.py` in Notepad and change `OVERLAY_MONITOR = 2` to `OVERLAY_MONITOR = 1`.
+Open `config.ini` and set `overlay_monitor = 1`.
 
 **The overlay appears on the wrong monitor:**
-Open `main.py` in Notepad and set `GAME_MONITOR` and `OVERLAY_MONITOR` to the correct numbers (1 = primary monitor).
+Open `config.ini` and set `game_monitor` and `overlay_monitor` to the correct numbers (1 = primary monitor).
 
 ---
 
