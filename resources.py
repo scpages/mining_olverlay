@@ -70,4 +70,5 @@ def analyze_rs(total_rs: int, mode: str = "ship") -> list[dict]:
         })
 
     results.sort(key=lambda x: (x["rem_pct"], x["nodes"]))
-    return results[:5]
+    exact_count = sum(1 for r in results if r["label"] == "EXACT")
+    return results[:max(exact_count, 5)]
